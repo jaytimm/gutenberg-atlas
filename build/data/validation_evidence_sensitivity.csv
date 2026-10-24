@@ -1,0 +1,6 @@
+subset,judged,cells,accuracy_percent,ci_low_percent,ci_high_percent
+All confirmed,199,10,87.4,82.7,92.1
+Excluding HathiTrust catalogue,176,10,87.4,82.3,92.5
+Excluding trade listings,172,10,86.3,81.2,91.5
+First-publication claims only,106,10,86.2,78.8,93.5
+Excluding trade and general web,120,9,86.4,80.2,92.7

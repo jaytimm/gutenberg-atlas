@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this dataset, please cite it as below."
+title: "Gutenberg Atlas: Publication-Year and Author Metadata for English-Language Project Gutenberg Books"
+type: dataset
+authors:
+  - family-names: Timm
+    given-names: Jason
+    affiliation: University of New Mexico
+version: 1.0.0
+date-released: 2026-10-24
+doi: 10.5281/zenodo.23628668
+license: CC-BY-4.0
+repository-code: "https://github.com/jaytimm/gutenberg-atlas"
+keywords:
+  - Project Gutenberg
+  - HathiTrust
+  - Wikidata
+  - publication dates
+  - author metadata
+  - cultural analytics

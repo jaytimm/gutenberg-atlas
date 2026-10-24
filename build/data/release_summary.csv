@@ -1,0 +1,9 @@
+metric,value
+eligible_books,38550
+release_books,21296
+gender_coverage_percent,99.5
+citizenship_coverage_percent,89.1
+lifespan_conflicts,750
+publication_year_min,1700
+publication_year_median,1901
+publication_year_max,2004

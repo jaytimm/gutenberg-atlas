@@ -1,0 +1,276 @@
+---
+title: "Gutenberg Atlas: selection, composition, and validation"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
+                      fig.width = 8, fig.height = 4.5)
+library(data.table)
+library(ggplot2)
+library(knitr)
+source("labels.R")
+root <- normalizePath("..")
+release <- fread(file.path(root, "build/data/release.csv"))
+funnel <- fread(file.path(root, "build/data/funnel.csv"))
+checked <- fread(file.path(root, "build/data/validation_handcheck.csv"))
+catalog <- fread(file.path(root, "data-raw/pg_catalog.csv"), encoding = "UTF-8")
+setnames(catalog, c("pg_id", "type", "issued", "catalog_title", "language",
+                    "catalog_authors", "subjects", "locc", "bookshelves"))
+release[catalog, on = "pg_id",
+        `:=`(subjects = i.subjects, locc = i.locc, bookshelves = i.bookshelves)]
+release[, genre := assign_genre(bookshelves, subjects, locc)]
+release[, model_period := assign_period(ht_year)]
+theme_set(theme_minimal(base_size = 12))
+```
+
+## What this report covers
+
+This report describes the frozen automated release. It counts how books enter
+and leave the build, summarizes the resulting collection, and reports the
+publication-year validation. Nothing here changes `release.csv`. The manual
+validation is an evaluation of the automated dates, not a set of corrections
+applied back to individual books.
+
+The counts describe this Project Gutenberg release. They do not estimate what
+share of all historical publications had a given author or date.
+
+## Selection
+
+An eligible book is an English-language Project Gutenberg text with one named
+personal author. The date comes from the earliest HathiTrust record matched on
+normalized author surname and title. A book is released only when its author
+also resolves through the Project Gutenberg agent identifier to a Wikidata
+entity explicitly recorded as human, and the matched year falls within the
+author's lifespan screen: no earlier than 15 years after birth, and no more
+than five years after death. The lower bound of the release is 1700.
+
+```{r funnel}
+funnel[, decision := factor(decision, levels = decision)]
+kable(funnel, col.names = c("Decision", "Books"), format.args = list(big.mark = ","))
+ggplot(funnel, aes(decision, N)) +
+  geom_col(width = 0.7) +
+  scale_y_continuous(labels = scales::label_comma()) +
+  labs(x = NULL, y = "Books", title = "Selection funnel") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+The release contains `r format(nrow(release), big.mark=",")` books. Most
+exclusions are HathiTrust non-matches or authors who do not resolve to a
+Wikidata human. The lifespan screen removes posthumous matches, implausibly
+early dates, and books whose author has no usable lifespan.
+
+## Dates and match quality
+
+`ht_year` is the earliest year among the accepted HathiTrust matches. It is an
+estimate of first publication, not a guarantee that the matched record is the
+first edition. Later matched years are retained; their lower validation
+accuracy is reported rather than used as an exclusion rule.
+
+```{r dates}
+ggplot(release, aes(ht_year)) +
+  geom_histogram(binwidth = 10, boundary = 1700) +
+  scale_y_continuous(labels = scales::label_comma()) +
+  labs(x = "HathiTrust matched year", y = "Books",
+       title = "Matched publication years")
+tier_counts <- release[, .N, .(tier = paste("Tier", tier))]
+kable(tier_counts, col.names = c("Match tier", "Books"))
+```
+
+Tier 1 is an exact normalized title match within surname. Tier 2 allows a
+normalized title to be a prefix of the other title, which mainly accommodates
+subtitles. The collection is concentrated in the late nineteenth and early
+twentieth centuries.
+
+## Author metadata
+
+Gender and country of citizenship are raw Wikidata claims, P21 and P27. They
+are included as supplied by the 2026-10-21 Wikidata snapshot. Their coverage is
+directly measurable; their accuracy against an independent biographical
+authority is not. Birth and death years are retained from both Project
+Gutenberg and Wikidata. When both sources supply a birth year and disagree,
+`lifespan_conflict` records the disagreement without choosing a winner.
+
+```{r authors}
+authors <- unique(release, by = "agent")
+coverage <- data.table(
+  Field = c("Gender", "Country of citizenship", "Wikidata birth year",
+            "Wikidata death year", "English author label"),
+  Books = c(
+    release[gender != "", .N],
+    release[country_of_citizenship != "", .N],
+    release[!is.na(wd_birth), .N],
+    release[!is.na(wd_death), .N],
+    release[wd_label != qid, .N]
+  ),
+  Authors = c(
+    authors[gender != "", .N],
+    authors[country_of_citizenship != "", .N],
+    authors[!is.na(wd_birth), .N],
+    authors[!is.na(wd_death), .N],
+    authors[wd_label != qid, .N]
+  )
+)
+coverage[, `Book coverage` := paste0(round(100 * Books / nrow(release), 1), "%")]
+coverage[, `Author coverage` := paste0(round(100 * Authors / nrow(authors), 1), "%")]
+kable(coverage[, .(Field, Books, `Book coverage`, Authors, `Author coverage`)],
+      format.args = list(big.mark = ","))
+
+both_birth <- authors[!is.na(birth) & !is.na(wd_birth)]
+both_death <- authors[!is.na(death) & !is.na(wd_death)]
+agreement <- data.table(
+  Comparison = c("Birth year, exact", "Birth year, within one year",
+                 "Death year, exact", "Death year, within one year"),
+  Agreement = c(
+    both_birth[birth == wd_birth, .N],
+    both_birth[abs(birth - wd_birth) <= 1, .N],
+    both_death[death == wd_death, .N],
+    both_death[abs(death - wd_death) <= 1, .N]
+  ),
+  Compared = c(nrow(both_birth), nrow(both_birth), nrow(both_death), nrow(both_death))
+)
+agreement[, Percent := round(100 * Agreement / Compared, 1)]
+kable(agreement,
+      caption = "Agreement between Project Gutenberg and Wikidata. This is not independent accuracy.")
+```
+
+The release contains `r format(nrow(authors), big.mark=",")` distinct resolved
+authors. Gender is nearly complete at book level, while citizenship is less
+complete, especially among authors represented by few books. Exact lifespan
+agreement is high where both sources have a year, but the roughly
+`r format(release[lifespan_conflict == TRUE, .N], big.mark=",")`
+flagged birth-year conflicts remain visible in the release.
+
+```{r author-distribution}
+per_author <- release[, .N, agent]
+author_summary <- data.table(
+  Statistic = c("Median books per author", "Mean books per author",
+                "Authors with one book", "Books from the 100 most frequent authors"),
+  Value = c(
+    median(per_author$N),
+    round(mean(per_author$N), 1),
+    per_author[N == 1, .N],
+    release[agent %in% per_author[order(-N)][1:100, agent], .N]
+  )
+)
+kable(author_summary, format.args = list(big.mark = ","))
+
+gender_counts <- release[, .N, .(gender = fifelse(gender == "", "missing", gender))]
+gender_counts[, Percent := round(100 * N / sum(N), 1)]
+kable(gender_counts[order(-N)], col.names = c("Wikidata gender claim", "Books", "Percent"))
+
+top_cit <- release[country_of_citizenship != "" & !grepl(";", country_of_citizenship),
+                   .N, country_of_citizenship][order(-N)][1:8, country_of_citizenship]
+release[, citizenship_group := fcase(
+  country_of_citizenship == "", "Missing",
+  grepl(";", country_of_citizenship), "Multiple claims",
+  country_of_citizenship %in% top_cit, country_of_citizenship,
+  default = "Other single claim"
+)]
+cit <- release[, .N, citizenship_group][order(-N)]
+cit[, Percent := round(100 * N / sum(N), 1)]
+kable(cit, col.names = c("Citizenship group", "Books", "Percent"))
+```
+
+P27 preserves historical country names, so Britain is split across labels such
+as “United Kingdom” and “United Kingdom of Great Britain and Ireland,” and
+some authors have more than one citizenship claim. Those are reported as
+recorded rather than collapsed into a modern nationality.
+
+## Broad genre labels
+
+The release itself has no single genre field. For description and the modeling
+pilot, catalog metadata supplies four mutually exclusive labels. Fiction,
+poetry, and drama require one unambiguous signal from Project Gutenberg
+bookshelves, subjects, or the juvenile-literature LoC class PZ. Nonfiction
+requires the absence of all three signals and a primary LoC class outside
+literature. Books with conflicting creative signals, or literature-class books
+without a specific signal, are excluded from genre analysis rather than forced
+into a class.
+
+```{r genre}
+genre_counts <- release[, .N, genre][order(-N)]
+genre_counts[, Percent := round(100 * N / sum(N), 1)]
+kable(genre_counts, col.names = c("Genre label", "Books", "Percent"))
+ggplot(genre_counts, aes(reorder(genre, N), N)) +
+  geom_col(width = 0.7) +
+  coord_flip() +
+  scale_y_continuous(labels = scales::label_comma()) +
+  labs(x = NULL, y = "Books", title = "Deterministic broad genre labels")
+```
+
+## Publication-year validation
+
+The validation sample contains 200 release books, stratified by matched period
+and match tier, with a minimum of eight books per cell. The sampling weights
+reconstruct the release composition. Each judged row has a cited
+first-publication year in `validation_sourced.csv`. A date counts as accurate
+when the HathiTrust year is within one year of that cited year. One book
+remains ambiguous because its source edition cannot be identified, so it has
+no verdict.
+
+The reported estimate is stratified. Within each period-by-tier cell, accuracy
+is the sample mean; cells are then combined in proportion to their size in the
+full release. This prevents the intentionally oversampled early and late
+periods from dominating the overall figure.
+
+```{r validation}
+checked[, year_ok := as.logical(year_ok)]
+strat_est <- function(d) {
+  N <- d[, .(N_h = weight[1] * .N), .(period, tier)]
+  s <- d[!is.na(year_ok), .(n_h = .N, p_h = mean(year_ok)), .(period, tier)]
+  s <- s[N, on = c("period", "tier"), nomatch = 0L]
+  s[, W_h := N_h / sum(N_h)]
+  p <- s[, sum(W_h * p_h)]
+  se <- sqrt(s[n_h > 1, sum(W_h^2 * p_h * (1 - p_h) / (n_h - 1))])
+  data.table(judged = sum(s$n_h), accuracy = p,
+             low = max(0, p - 1.96 * se), high = min(1, p + 1.96 * se))
+}
+overall <- strat_est(checked)
+overall_table <- overall[, .(
+  Judged = judged,
+  Accuracy = paste0(round(100 * accuracy, 1), "%"),
+  `95% interval` = paste0(round(100 * low, 1), "% to ", round(100 * high, 1), "%")
+)]
+kable(overall_table, caption = "Weighted accuracy within one year")
+
+by_period <- checked[!is.na(year_ok), .(
+  Judged = .N,
+  Accurate = sum(year_ok),
+  Accuracy = paste0(round(100 * mean(year_ok), 1), "%")
+), period]
+kable(by_period, caption = "Unweighted accuracy inside each validation period")
+
+judged <- checked[!is.na(true_year)]
+judged[, gap := abs(ht_year - true_year)]
+gap_table <- judged[, .(
+  Books = .N,
+  `Within 1 year` = paste0(round(100 * mean(gap <= 1), 1), "%"),
+  `Within 5 years` = paste0(round(100 * mean(gap <= 5), 1), "%"),
+  `Median absolute gap` = as.double(median(gap))
+), period]
+kable(gap_table, caption = "Absolute difference between matched and cited years")
+```
+
+Accuracy is fairly stable from 1850 through 1924 and weaker before 1850. The
+1925-and-later cell is the clear failure point: the earliest available
+HathiTrust match is often a reprint. That is why the release excludes the
+whole stratum instead of trying to repair individual books.
+
+The complete 200-row audit is written to `validation_audit.csv` beside this
+report. It retains the cited year, source, and verdict separately from the
+release.
+
+```{r validation-table}
+audit <- checked[, .(
+  pg_id, period, tier, title = gsub("[\r\n]+", " ", title),
+  authors, ht_year, true_year, year_ok, confidence, year_source, notes
+)]
+fwrite(audit, "validation_audit.csv")
+kable(head(audit[, .(pg_id, period, title = substr(title, 1, 45),
+                     ht_year, true_year, year_ok)], 12),
+      caption = "First rows of the 200-book validation audit")
+```

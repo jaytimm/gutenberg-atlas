@@ -1,0 +1,8 @@
+scope,group,judged,accuracy_percent,ci_low_percent,ci_high_percent
+overall_weighted,all,199,87.4,82.7,92.1
+overall_weighted,confirmed_only,199,87.4,82.7,92.1
+period_unweighted,1700-99,16,81.2,,
+period_unweighted,1800-49,16,81.2,,
+period_unweighted,1850-99,67,89.6,,
+period_unweighted,1900-24,84,89.3,,
+period_unweighted,1925+,16,62.5,,

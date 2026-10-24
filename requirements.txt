@@ -1,0 +1,5 @@
+# Steps 11, 17, 18 use only the Python standard library.
+# The embedding step (analysis/embed_bge.py) needs:
+numpy
+torch
+sentence-transformers

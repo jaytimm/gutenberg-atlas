@@ -1,0 +1,201 @@
+pg_id,true_year,confidence,notes
+3300,1776,high,
+5182,1777,medium,"first issued 1777 as The Champion of Virtue; retitled 1778"
+18508,1799,high,"Part I 1799; Part II 1800"
+20304,1793,high,
+29372,1799,high,
+30274,1783,medium,"3 vols 1783-89; HT 1787 is a later vol/edition"
+33504,1704,high,
+46378,1763,high,
+5266,1799,high,
+9612,1791,high,"Part 1 dated 1791 (issued 1792); Part 2 appeared first, 1789"
+19214,,low,"multi-part Hume; which reign this Part covers decides 1754/1759/1762 - check PG text"
+24218,1787,medium,"Hawkins collected Works 1787; policy: collected edition year"
+24886,1785,high,
+28272,1775,high,"Scots Worthies first 1775; 1796 is a reprint inside the posthumous window"
+35890,1773,high,
+59846,1788,medium,
+10363,1831,high,
+11140,1838,medium,
+12486,1835,high,
+35810,1839,high,
+42825,1832,medium,"author is Robert Buist; Wikidata item lacks English label"
+48001,1812,medium,
+61993,1837,medium,
+66323,1847,high,
+7637,1828,high,"The Disowned 1828; HT 1839 is a reprint"
+7750,1833,high,
+9754,1841,high,
+14464,1811,medium,"series 1811-24; per-volume date not checked"
+28729,1804,high,
+39472,1821,medium,"1st series 1820-23; vol 2 c.1821-22"
+49859,1838,medium,
+76102,1834,low,"series 1832-34; vol 9 is 1834; HT took the set's start year - policy for multi-vol sets"
+12,1871,high,"issued Dec 1871, title page 1872"
+1228,1859,high,"Wikidata label 'Charles Darwin's books' - P1938 resolves to the wrong item; author fields suspect"
+2334,1899,medium,"one-volume collected edition; policy: collected edition year"
+2472,1857,high,
+3103,1889,high,"novel 1889; HT 1891 is a reprint"
+4494,,low,"serialized 1879 (New Quarterly); first book form uncertain (1891 US vs 1894 UK)"
+4888,1874,high,
+5118,1877,high,
+8509,1876,high,
+9787,1890,high,
+11990,,low,"possibly privately printed 1886 before the 1890 Houghton ed. - check"
+13375,1882,medium,
+14291,1899,high,
+14762,1857,medium,
+15073,1893,medium,
+15227,1885,medium,
+17260,1854,high,
+32812,1854,high,
+33139,1864,medium,
+35196,1877,medium,
+35438,1874,high,
+35443,1864,medium,
+37813,1866,high,
+40402,1873,high,
+40513,1863,medium,
+41362,1857,medium,"first 1857; PG text is the 1877 'New Edition' - policy: first edition vs transcribed edition"
+59685,,low,"Original Plays 2nd series possibly 1881 - check"
+43189,1893,high,
+46132,1859,high,
+47165,1887,medium,
+50243,1871,high,
+52073,1883,high,
+58459,1889,high,
+65633,1873,high,
+68270,1895,high,
+74298,1894,high,
+76408,,low,"possibly 1847 - check"
+1275,1854,high,
+4536,1863,high,
+4822,1856,high,
+4834,1856,high,
+4880,1860,high,"vols 1860-67; first vols 1860"
+5860,1885,high,
+7133,1886,high,
+8480,1883,high,"Life on the Mississippi 1883; HT 1899 is a reprint while author alive"
+9104,1882,high,
+13223,1863,high,
+15807,1898,medium,
+16053,,low,"Hungerford novel - first ed. year not known to me"
+18044,1884,high,
+20819,1855,high,"c1855 imprint"
+22865,,low,"Turgot essay in Critical Miscellanies - 1871/1877/1886 depending on series; check"
+24362,1852,high,
+24689,1884,high,
+25520,1868,medium,
+31712,1896,high,
+33620,1898,medium,
+41634,1888,high,
+50511,1880,high,
+50512,1894,medium,
+51497,1896,high,
+56418,1898,high,"New York Nocturnes is 1898 (Lamson, Wolffe); HT 1887 is a wrong-book match"
+58658,1882,high,
+59075,1881,high,
+59890,1862,high,
+60290,1899,high,
+70307,1884,medium,
+78470,1863,medium,
+1029,1913,high,
+1095,1914,high,
+2287,1911,high,
+4382,1903,high,
+5263,1920,medium,
+9461,1920,high,
+10373,1919,high,
+11504,1916,high,
+12902,1912,high,
+14218,1902,high,
+14519,,low,"Five Little Plays possibly 1912 - check"
+18883,1902,high,
+22804,1917,high,
+25291,1921,high,
+26507,1899,high,
+31159,1907,high,"1907; HT 1909 is a reprint"
+35127,1904,medium,
+35424,1905,medium,"The Amethyst Box 1905; HT 1907 is a reprint"
+37510,1918,medium,
+37718,1904,high,
+40545,1919,high,
+41455,1908,high,
+41525,1902,medium,"Wikidata item lacks English label"
+43816,1914,high,
+49033,1906,medium,
+49731,1907,high,
+51523,1914,medium,
+54527,1901,high,"imprint shows c1901; HT 1913 is a reprint - copyright date in imprint is a usable signal"
+56664,1917,high,
+58654,1921,high,
+61484,1922,high,
+61550,1910,high,"On Anything 1910; HT 1924 is a reprint"
+66690,1902,high,
+70969,1918,high,
+71999,1915,medium,
+72198,1916,medium,
+78762,1914,high,
+78836,1911,high,
+78872,1918,medium,
+79577,1919,high,
+1044,1909,high,"book 1909; magazine 1907-08"
+4377,1901,high,
+4713,1907,high,
+5241,1920,high,
+6025,1912,high,
+7123,1911,high,
+10359,1908,high,
+10675,1916,high,
+12481,1910,high,
+12956,1922,high,
+14087,1921,medium,
+15591,1919,high,
+16138,1902,medium,
+17570,1915,high,
+20210,1907,medium,
+20945,1917,high,"Patty Blossom 1917; HT 1924 is a reprint"
+23675,1903,high,
+25341,1922,high,
+27080,1915,high,
+28425,1916,high,
+32000,1906,high,
+32778,1922,high,
+34189,1917,high,
+34410,1919,medium,"UK 1919; US Putnam 1920"
+35679,1922,high,
+36198,1913,high,
+38171,1920,medium,
+41020,1864,high,"Clara Vaughan 1864; HT 1900 (Burt n.d.) is a reprint"
+41771,1908,high,
+48975,1922,high,
+50001,1917,high,
+50057,1904,high,
+55919,1905,high,
+61195,1915,high,
+61325,1922,high,
+62164,1915,high,
+62697,1922,high,
+63154,1917,medium,
+64224,1910,medium,
+65232,1915,high,
+66838,1914,high,
+69236,1909,medium,
+72438,1895,medium,"1st ed. vols 1894-97; HT 1906 is the 2nd edition"
+78969,1915,high,
+2891,1910,high,"Howards End 1910; HT 1943 is a reprint"
+20988,1956,high,"book 1956; serialized 1931 - policy: book form"
+40357,1911,high,"1911; HT 1939 is a reprint"
+40906,1917,high,"Merlin 1917; HT 1927 is a reprint"
+41162,1926,medium,"the 1926 collected Personae (distinct from the 1909 Personae)"
+64457,1925,high,
+71247,1951,high,
+71929,1926,high,"1926; HT 1928 is a reprint"
+8446,1922,high,"1922; HT 1927 is a reprint"
+18189,1953,medium,
+20289,1961,medium,
+38770,1955,high,
+51745,1949,medium,
+68084,1926,medium,
+69549,1926,high,
+70325,1926,high,"Mary Christmas 1926; HT 1936 is a reprint"

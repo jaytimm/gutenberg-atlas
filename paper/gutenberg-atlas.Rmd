@@ -1,0 +1,404 @@
+---
+title: "Gutenberg Atlas: Publication-Year and Author Metadata for English-Language Project Gutenberg Books"
+author: |
+  Jason Timm\*\
+  University of New Mexico, Albuquerque, NM, USA
+date: ""
+lang: en-US
+documentclass: article
+papersize: letter
+fontsize: 11pt
+geometry: margin=1in
+linestretch: 1.15
+bibliography: references.bib
+csl: ../../preprint-style/apa.csl
+link-citations: false
+output:
+  pdf_document:
+    number_sections: true
+    keep_tex: true
+    highlight: null
+    includes:
+      in_header: ../../preprint-style/preamble.tex
+  html_document:
+    number_sections: true
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(data.table)
+library(knitr)
+library(ggplot2)
+root <- normalizePath("..")
+source(file.path(root, "..", "preprint-style", "preprint.R"))
+options(knitr.kable.NA = "", kableExtra.latex.load_packages = FALSE)
+
+release <- fread(file.path(root, "build/data/release.csv"))
+release_summary <- fread(file.path(root, "build/data/release_summary.csv"))
+author_summary <- fread(file.path(root, "build/data/author_metadata_summary.csv"))
+date_summary <- fread(file.path(root, "build/data/date_validation_summary.csv"))
+validation_all <- fread(file.path(root, "build/data/validation_handcheck.csv"))
+validation_all[, year_ok := as.logical(year_ok)]
+model_metrics <- fread(file.path(root, "analysis/results/model_metrics.csv"))
+model_sample <- fread(file.path(root, "analysis/results/model_sample.csv"))
+source(file.path(root, "analysis/labels.R"))
+catalog <- fread(file.path(root, "data-raw/pg_catalog.csv"), encoding = "UTF-8")
+setnames(catalog, c("pg_id", "type", "issued", "catalog_title", "language",
+                    "catalog_authors", "subjects", "locc", "bookshelves"))
+release[catalog, on = "pg_id", genre := assign_genre(i.bookshelves, i.subjects, i.locc)]
+release[, model_gender := assign_gender(gender)]
+
+paper_table <- function(x, caption = NULL, widths = NULL, align = NULL, ...) {
+  if (knitr::is_latex_output()) {
+    preprint_kable(x, caption = caption, widths = widths, align = align, ...)
+  } else {
+    knitr::kable(x, caption = caption, align = align, ...)
+  }
+}
+```
+
+\noindent{\small *Corresponding author: Jason Timm; jtimm@unm.edu}
+
+# Abstract {.unnumbered}
+
+Gutenberg Atlas is a book-level metadata dataset for English-language Project
+Gutenberg. For 21,296 books, it provides publication years derived from
+HathiTrust bibliographic matches, author lifespans, Wikidata gender and
+citizenship claims, and stable identifiers linking the source records. Records
+were linked deterministically to Wikidata authors and matched
+to HathiTrust bibliographic holdings. In a stratified sample of 199 release
+records, the derived years were within one year of sourced reference years for
+87.4% (95% CI 82.7--92.1). The dataset supports historical corpus construction,
+digital humanities, bibliographic research, and evaluation of metadata-linkage
+methods.
+
+**Keywords:** Project Gutenberg; HathiTrust; Wikidata; bibliographic metadata;
+digital humanities; historical corpora
+
+# Overview
+
+Project Gutenberg is a large, continuously updated collection of
+machine-readable books, but its catalog does not systematically record when a
+work first appeared in print [@projectgutenberg_catalog]. Existing releases
+provide only part of the metadata needed for historical research: PG-19
+includes publication dates but targets language modeling [@rae2019compressive],
+whereas the Standardized Project Gutenberg Corpus includes author lifespans
+but not book-level first-publication years [@gerlach2020spgc]. Related work has
+enriched German-language corpora with publication and demographic metadata
+[@rohrbacher2025decorp; @rohrbacher2026bridging], while NovelTM documents
+HathiTrust metadata for English-language fiction [@underwood2020noveltm].
+
+Gutenberg Atlas combines book-level publication-year estimates, structured
+author metadata, and sourced date validation for English Project Gutenberg in
+one reproducible build. Wikidata work dates served only as a cross-check
+because just 41 validation books matched a dated work. No book texts are
+redistributed. The resource is intended for studies that need temporal and
+author covariates on the same books without obscuring which archive supplied
+each value.
+
+## Repository location
+
+**Repository:** <https://github.com/jaytimm/gutenberg-atlas>  
+**Dataset DOI:** <https://doi.org/10.5281/zenodo.23628668>
+
+The repository contains the frozen release, retained candidate
+records with decision codes, validation records, documentation, build scripts, and
+Supplementary File 1. The DOI identifies the archived version 1.0.0 release
+[@timm2026atlas].
+
+## Context
+
+Project Gutenberg supplies catalog identity, HathiTrust bibliographic
+evidence, and Wikidata structured author claims. Source fields are retained so
+values remain traceable and reusable with Project Gutenberg texts. The release
+also preserves excluded candidates and decision codes, allowing users to audit
+coverage and apply different inclusion rules rather than treating the released
+corpus as a neutral sample of publishing history.
+
+# Method
+
+## Steps
+
+The build began with a frozen Project Gutenberg RDF catalog:
+61,865 English-only text records [@projectgutenberg_catalog]. Restriction to
+one named personal author and no other contributor left 38,550 eligible books,
+excluding anonymous, multi-author, and most translated or edited works. The
+monthly HathiTrust extract `hathi_full_20261001` was filtered to English books
+[@hathitrust_hathifiles]. Normalized titles were matched within author surname,
+first exactly and then by prefix containment. The earliest imprint in the best
+tier became the year estimate. It is the earliest matched English-language
+HathiTrust edition, not necessarily first publication; translations,
+collections, and multi-volume sets require particular caution. For a
+translation it may approximate the earliest matched English edition, while a
+volume can inherit the date of a collected or multi-volume set.
+
+Project Gutenberg agent identifiers were linked through Wikidata property
+P1938, retaining human entities and their identifier, label, gender (P21),
+citizenship (P27), birth (P569), and death (P570) claims. These are dated
+source claims, not inferences from names or text [@vrandecic2014wikidata].
+Project Gutenberg and Wikidata lifespans remain separate; conflicts are
+flagged.
+
+A released book required a HathiTrust match, a Wikidata human link, a year of
+1700 or later, and an estimate between birth plus 15 and death plus five.
+Project Gutenberg supplied lifespans, with Wikidata filling gaps and birth
+plus 90 used when death was missing. Other eligible records remain in
+`unverified_candidates.csv` with exclusion reasons.
+
+Of 38,550 eligible books, 21,296 (55.2%) were released. Main exclusions were
+no HathiTrust match (9,535), no Wikidata link (5,208), and an estimate more
+than five years after death (2,251). Exclusion varied by author era
+(Supplementary File 1).
+
+## Sampling strategy
+
+Publication-year accuracy was evaluated on 200 release books stratified by
+five periods and two match tiers. At least eight books represented each cell;
+remaining positions followed cell size. Sampling was without replacement
+(seed 20261021); Supplementary File 1 gives the allocation.
+
+## Quality control
+
+Reference years were manually researched and stored with source URLs and
+notes. Years were resolved for 199 books; one composite edition remained
+unresolved. Accuracy meant agreement within one year. Cell estimates were
+weighted to the release, with a stratified normal 95% confidence interval.
+Sources included catalogues, digitized editions, reference works, and trade
+listings. For 23 books the reference was a separate HathiTrust record and thus
+not source-independent; excluding them gave 87.4% accuracy (95% CI
+82.3--92.5). Other source restrictions changed accuracy by at most 1.2 points
+(Supplementary File 1). Each reference note records what the cited year
+represents, so users can distinguish evidence for first publication from dates
+attached to particular editions. This distinction matters when dates anchor
+narrow historical comparisons.
+
+Weighted release accuracy was 87.4% (95% CI 82.7--92.1). Among 16 sampled
+books dated 1925 or later, 10 were correct. This sparse stratum represents a
+small share of the release and is reported as a limitation, not used as an
+upper date boundary. Of 28 errors, 25 estimates were late (median +7 years),
+usually reflecting a later edition or reprint.
+Validation measured accuracy but did not alter release rows. Because screening
+uses the estimated year, results apply only to released books, not the 17,254
+excluded candidates; genuine posthumous editions may also be excluded.
+
+```{r validation-by-period}
+validation_table <- rbind(
+  data.table(
+    Period = "Release (weighted)",
+    `Books judged` = date_summary[scope == "overall_weighted" & group == "all", judged],
+    Accuracy = sprintf(
+      "%.1f%% (95%% CI %.1f--%.1f)",
+      date_summary[scope == "overall_weighted" & group == "all", accuracy_percent],
+      date_summary[scope == "overall_weighted" & group == "all", ci_low_percent],
+      date_summary[scope == "overall_weighted" & group == "all", ci_high_percent]
+    )
+  ),
+  date_summary[scope == "period_unweighted", .(
+    Period = group,
+    `Books judged` = judged,
+    Accuracy = sprintf("%.1f%%", accuracy_percent)
+  )]
+)
+paper_table(
+  validation_table,
+  caption = "Publication-year accuracy in the release. The overall estimate is weighted; period rows are unweighted.",
+  widths = c(2, 1.5, 2.8)
+)
+```
+
+# Dataset Description
+
+```{r release-at-a-glance}
+n_eligible <- release_summary[metric == "eligible_books", value]
+n_release <- nrow(release)
+count_pct <- function(n, base, label) {
+  sprintf("%s (%.1f%% of %s)", format(n, big.mark = ","), 100 * n / base, label)
+}
+at_a_glance <- data.table(
+  Measure = c(
+    "Eligible books", "Released books", "Distinct linked authors",
+    "Publication years", "Gender coverage", "Citizenship coverage",
+    "Flagged lifespan conflicts", "Flagged dates"
+  ),
+  Result = c(
+    format(n_eligible, big.mark = ","),
+    count_pct(n_release, n_eligible, "eligible"),
+    format(uniqueN(release$agent), big.mark = ","),
+    sprintf("%d--%d (median %d)", min(release$ht_year), max(release$ht_year),
+            as.integer(median(release$ht_year))),
+    count_pct(release[gender != "", .N], n_release, "released"),
+    count_pct(release[country_of_citizenship != "", .N], n_release, "released"),
+    count_pct(release[lifespan_conflict == TRUE, .N], n_release, "released"),
+    count_pct(release[date_flag != "", .N], n_release, "released")
+  )
+)
+paper_table(
+  at_a_glance,
+  caption = "Construction, coverage, and quality profile of Gutenberg Atlas.",
+  widths = c(2.5, 3)
+)
+```
+
+```{r year-figure, fig.width=6.5, fig.height=2.4, out.width="85%", fig.align="center", fig.pos="!htbp", fig.cap="Estimated publication years of the 21,296 released books, by decade."}
+ggplot(release, aes(ht_year)) +
+  geom_histogram(binwidth = 10, boundary = 1700, fill = "grey35", color = "white") +
+  scale_y_continuous(labels = scales::label_comma()) +
+  labs(x = "Estimated publication year", y = "Books") +
+  theme_minimal(base_size = 10) +
+  theme(panel.grid.minor = element_blank())
+```
+
+**Repository name:** Gutenberg Atlas (GitHub `jaytimm/gutenberg-atlas`, release v1.0.0)  
+**Object names:** `release.csv`, `unverified_candidates.csv`, generated
+summaries, validation files, build code, and documentation  
+**Formats:** UTF-8 CSV (data); Markdown (documentation); R and Python
+scripts (build code)  
+**Creation dates:** 2026-10-20 to 2026-10-22  
+**Dataset creator:** Jason Timm (conceptualization, methodology, software,
+validation, curation, analysis, and documentation)  
+**Language:** English variable names and documentation; books selected as
+English in the Project Gutenberg catalog  
+**License:** CC BY 4.0 (data); MIT (code)  
+**Publication date:** 2026-10-24
+
+The canonical `release.csv` has one row per Project Gutenberg identifier. It
+records Gutenberg title and author fields; Wikidata identity, gender,
+citizenship, and lifespan claims; mapped present-day citizenship; HathiTrust
+year, item, imprint, match tier, and candidate count; and lifespan and date
+flags. The data dictionary separates source claims, derived fields, and
+validation results. Gender and citizenship retain Wikidata labels rather than
+being inferred from names or texts. The present-day citizenship mapping is a
+separate derived field, leaving users free to retain the historical claim or
+apply a different geographic scheme.
+
+Rows represent ebooks, not unique works. In total, 3,055 rows share a
+HathiTrust item with another row (930 items). Work-level studies should
+deduplicate on `htid` or title and author.
+
+The date flag marks uncertain imprints, multi-volume or collected-works
+titles, a single HathiTrust candidate, or more than 20 candidates; it describes
+rather than excludes. Unweighted validation accuracy was 80% for flagged and
+90% for unflagged books. These flags permit sensitivity analyses without
+silently replacing or correcting the source-derived values.
+
+`SOURCE_VERSIONS.md` documents snapshots and checksums;
+`RELEASE_FREEZE.md` identifies published artifacts. HathiTrust permits
+Hathifile reuse subject to contributing-institution restrictions
+[@hathitrust_metadata_policy], and Wikidata is CC0. The 1.2 GB filtered
+HathiTrust extract is not redistributed, but frozen match results permit
+rebuilding the release without it.
+
+# Reuse Potential
+
+Gutenberg Atlas supplies temporal and author covariates for historical corpus
+construction, stylometry, cultural analytics, book history, and teaching.
+Project Gutenberg identifiers support text retrieval under title-level terms
+and join directly to the Standardized Project Gutenberg Corpus
+[@gerlach2020spgc].
+
+## Worked reuse demonstration
+
+As a reuse demonstration, models predicted broad genre, 25-year period, and
+continuous year in five author-disjoint folds. Genre used 480 books; temporal
+tasks used 1800--1924, an analytical window chosen for historical balance, not
+a release boundary. Models received up to 5,000 body-text words. Penalized
+models used word or character TF--IDF [@friedman2010glmnet]; a semantic model
+averaged `BAAI/bge-base-en-v1.5` chunk embeddings [@xiao2023bge].
+
+```{r reuse-results}
+model_names <- c(
+  body_word = "Word TF-IDF", body_char = "Character TF-IDF",
+  body_bge = "BGE embeddings"
+)
+task_names <- c(
+  genre = "Broad genre", period = "Publication period",
+  year = "Publication year"
+)
+best_body <- rbindlist(lapply(names(task_names), function(task_name) {
+  candidates <- model_metrics[
+    task == task_name & model %in% c("body_word", "body_char", "body_bge")
+  ]
+  if (task_name == "year") candidates[which.min(mae)] else candidates[which.max(macro_f1)]
+}))
+baseline <- model_metrics[model == "baseline"]
+reuse_table <- merge(baseline, best_body, by = "task", suffixes = c("_baseline", "_body"))
+sample_sizes <- model_sample[, .(Books = .N, Authors = uniqueN(agent)), by = task]
+reuse_table <- merge(reuse_table, sample_sizes, by = "task")
+reuse_table <- reuse_table[task %in% names(task_names)]
+reuse_table[, task := factor(task, levels = names(task_names))]
+setorder(reuse_table, task)
+reuse_table[, `:=`(
+  Task = unname(task_names[task]),
+  Sample = sprintf("%s (%s)", Books, Authors),
+  `Best body model` = unname(model_names[model_body]),
+  Baseline = fifelse(
+    task == "year", sprintf("%.1f years MAE", mae_baseline),
+    sprintf("%.3f macro-F1", macro_f1_baseline)
+  ),
+  `Body-text result` = fifelse(
+    task == "year", sprintf("%.1f years MAE", mae_body),
+    sprintf("%.3f macro-F1", macro_f1_body)
+  )
+)]
+paper_table(
+  reuse_table[, .(Task, Sample, `Best body model`, Baseline, `Body-text result`)],
+  caption = "Author-disjoint reuse demonstration. Sample gives books (authors). Lower mean absolute error (MAE) is better; higher macro-F1 is better.",
+  widths = c(1.5, 1, 1.6, 1.5, 1.6)
+)
+```
+
+Body text substantially improved genre prediction, whereas the best model
+missed year by about 20 years on average. Raw file openings predicted time
+better because front matter often prints dates; temporal-language studies
+should therefore strip it. Supplementary File 1 gives full specifications,
+controls, intervals, and confusion matrices. The exercise is not offered as a
+benchmark leaderboard. It demonstrates two practical uses of the release:
+constructing author-disjoint historical samples and testing whether apparent
+temporal prediction comes from linguistic signal or printed metadata. Keeping
+all books by an author in one fold also prevents the evaluation from rewarding
+author recognition across train and test sets. The strong genre result shows
+that the linked texts support controlled supervised tasks; the weaker temporal
+result cautions that useful date covariates need not be readily recoverable
+from body language alone.
+
+## Limitations
+
+Project Gutenberg reflects public-domain law, volunteer selection, and
+preservation, not historical publishing. HathiTrust coverage is uneven and
+earliest matches can be reprints, biasing estimated years and publication ages
+later. Lifespan screening also truncates those errors. Wikidata claims are
+incomplete, especially for citizenship, and were not independently
+biographically validated. Provenance should be retained, and archive
+composition should not be treated as evidence of historical authorship or
+publication rates.
+
+# Competing interests {.unnumbered}
+
+The author has no competing interests to declare.
+
+# Author roles {.unnumbered}
+
+Jason Timm: Conceptualization, Data curation, Formal analysis, Investigation,
+Methodology, Software, Validation, Visualization, Writing -- original draft,
+and Writing -- review and editing.
+
+# AI declaration {.unnumbered}
+
+Anthropic Claude Code assisted with manuscript drafting, code debugging, and
+bibliographic searches for the validation sample. Every reference year in the
+validation sample rests on a cited source recorded in
+`validation_sourced.csv`, which the author checked. The author revised and
+verified the resulting text, analyses, citations, and reported values and
+takes responsibility for the final content.
+
+# Supplementary Files {.unnumbered}
+
+**Supplementary File 1.** *Gutenberg Atlas: Supplementary Materials.* Corpus
+construction, composition, publication-year validation, author-linkage audit,
+and an author-disjoint text-modeling reuse demonstration (`supplement.pdf`).
+
+# References {.unnumbered}
+
+::: {#refs}
+:::

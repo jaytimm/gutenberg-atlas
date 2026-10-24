@@ -1,0 +1,14 @@
+unit,metric,numerator,denominator,percent,note
+book,gender coverage,21194,21296,99.5,Wikidata P21; coverage only
+book,citizenship coverage,18978,21296,89.1,Wikidata P27; coverage only
+book,Wikidata birth-year coverage,21223,21296,99.7,""
+book,Wikidata death-year coverage,21153,21296,99.3,""
+author,gender coverage,7293,7383,98.8,Wikidata P21; coverage only
+author,citizenship coverage,5906,7383,80,Wikidata P27; coverage only
+author,English label coverage,7138,7383,96.7,Wikidata label service; QID fallback counts as missing
+author,normalized name agreement,4079,7383,55.2,Strict full-name token equality; diagnostic only
+author,surname token agreement,6981,7383,94.6,PG surname tokens present in Wikidata label; diagnostic only
+author,birth year exact agreement,6625,6955,95.3,"Agreement, not independent accuracy"
+author,birth year within one year,6792,6955,97.7,"Agreement, not independent accuracy"
+author,death year exact agreement,6696,6774,98.8,"Agreement, not independent accuracy"
+author,death year within one year,6726,6774,99.3,"Agreement, not independent accuracy"

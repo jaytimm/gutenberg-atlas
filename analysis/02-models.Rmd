@@ -1,0 +1,344 @@
+---
+title: "Gutenberg Atlas: what the text carries"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
+                      fig.width = 8, fig.height = 4.5)
+library(data.table)
+library(knitr)
+source("labels.R")
+source("model_tools.R")
+root <- normalizePath("..")
+release <- fread(file.path(root, "build/data/release.csv"))
+catalog <- fread(file.path(root, "data-raw/pg_catalog.csv"), encoding = "UTF-8")
+setnames(catalog, c("pg_id", "type", "issued", "catalog_title", "language",
+                    "catalog_authors", "subjects", "locc", "bookshelves"))
+release[catalog, on = "pg_id",
+        `:=`(subjects = i.subjects, locc = i.locc, bookshelves = i.bookshelves)]
+release[, genre := assign_genre(bookshelves, subjects, locc)]
+release[, period25 := assign_period25(ht_year)]
+release[, model_gender := assign_gender(gender)]
+n_per_class <- 120L
+extra <- 30L
+n_year_bin <- 80L
+n_gender_cell <- 25L
+min_female_authors <- 20L
+max_books <- 2L
+n_boot <- 1000L
+seed <- 20261021L
+late_bins <- c("1850-1874", "1875-1899", "1900-1924")
+dir.create("results", showWarnings = FALSE)
+options(atlas.progress = "results/progress.log")
+```
+
+## What this pilot asks
+
+The release is a metadata file. Its use as a corpus depends on whether the
+books' texts carry the information the metadata records. This report tests
+that directly. A linear model sees a passage from the middle of each book,
+with the Project Gutenberg header and front matter removed, and is asked to
+recover four labels.
+
+- Broad genre: fiction, nonfiction, poetry, or drama. Books with conflicting
+  or incomplete catalog signals are left out.
+- Period, in three 25-year bins: 1850–1874, 1875–1899, and 1900–1924. These
+  bins hold about nine in ten of the books with a standard-quality date.
+- Publication year as a number, from 1800 to 1924. This avoids choosing bin
+  edges and asks how many years off the model is.
+- Gender, from the Wikidata claims `male` and `female`, with genre and period
+  held fixed by matching.
+
+Dates use only matched years before 1925. Earlier than 1800 there are too
+few dated books to model.
+Country of citizenship is not modeled; the historical labels are too
+fragmented.
+
+These fits do not update `release.csv`. A score above the baseline means the
+label is predictable from the text of this corpus under the split below. It
+does not mean the model has found a genre essence or an author's gender.
+
+## Sample and split
+
+Genre and period draw `r n_per_class` books per class. The year task draws
+`r n_year_bin` books from each 25-year bin between 1800 and 1924, so the
+early decades are not swamped by 1900–1924. No Project Gutenberg agent
+contributes more than `r max_books` books to a class. Extra candidates are
+drawn so that a book without a usable body can be replaced.
+
+The gender sample is matched. Within each genre × 25-year cell from 1850 to
+1924, the report draws `r n_gender_cell` books by women and
+`r n_gender_cell` by men, and drops cells with fewer than
+`r min_female_authors` women authors. Drama is left out because women
+dramatists are too few before 1900. Genre and period therefore have the same
+distribution in both classes and cannot produce a gender result on their
+own.
+
+Evaluation is author-disjoint. Agents are assigned to five folds, stratified
+by class, and every book by an agent stays in one fold. The vocabulary, the
+inverse-document-frequency weights, and the penalty are all fit on the
+training folds; the penalty's inner cross-validation is also split by
+author. Metrics use only held-out predictions.
+
+```{r sample-and-fit}
+prepare_pool <- function(pool, n, task_name, task_seed) {
+  sampled <- sample_task(pool, "class", n, max_books, task_seed)
+  sampled[, task := task_name]
+  sampled
+}
+
+dated <- release[!is.na(period25)]
+gender_pool <- release[!is.na(model_gender) &
+                         genre %in% c("fiction", "nonfiction", "poetry") &
+                         period25 %in% late_bins]
+gender_pool[, cell := paste(genre, period25)]
+gender_cells <- gender_pool[model_gender == "female", .(authors = uniqueN(agent)), by = cell]
+gender_cells <- gender_cells[authors >= min_female_authors, cell]
+
+candidates <- rbindlist(list(
+  prepare_pool(release[genre %in% c("fiction", "nonfiction", "poetry", "drama"),
+                       .(pg_id, agent, class = genre)],
+               n_per_class + extra, "genre", seed),
+  prepare_pool(dated[period25 %in% late_bins, .(pg_id, agent, class = period25)],
+               n_per_class + extra, "period", seed + 10L),
+  prepare_pool(dated[, .(pg_id, agent, class = period25, year = ht_year)],
+               n_year_bin + extra, "year", seed + 30L),
+  rbindlist(lapply(seq_along(gender_cells), function(i) {
+    pool <- gender_pool[cell == gender_cells[[i]],
+                        .(pg_id, agent, class = model_gender, cell)]
+    prepare_pool(pool, n_gender_cell + 10L, "gender", seed + 100L + i)
+  }))
+), fill = TRUE)
+
+views <- fetch_views(unique(candidates$pg_id), "cache/pg-text")
+bge <- embed_bge(views, "cache/bge-base.csv")
+
+usable <- function(task_name) {
+  part <- views[candidates[task == task_name], on = "pg_id"]
+  part[!is.na(body_text)]
+}
+
+finish_task <- function(task_name, n_keep, task_seed) {
+  part <- usable(task_name)
+  kept <- part[, head(.SD, n_keep), by = class]
+  assign_folds(kept, "class", task_seed + 1L)
+}
+
+finish_gender <- function(task_seed) {
+  part <- usable("gender")
+  kept <- part[, {
+    k <- min(n_gender_cell, sum(class == "female"), sum(class == "male"))
+    rbind(head(.SD[class == "female"], k), head(.SD[class == "male"], k))
+  }, by = cell]
+  assign_folds(kept, "class", task_seed + 1L)
+}
+
+tasks <- list(
+  genre = finish_task("genre", n_per_class, seed),
+  period = finish_task("period", n_per_class, seed + 10L),
+  year = finish_task("year", n_year_bin, seed + 30L),
+  gender = finish_gender(seed + 20L)
+)
+outcomes <- c(genre = "class", period = "class", year = "year", gender = "class")
+
+fwrite(rbindlist(lapply(tasks, function(t) t[, .(task, pg_id, agent, class, fold)])),
+       "results/model_sample.csv")
+
+predictions <- lapply(names(tasks), function(n) run_task(tasks[[n]], outcomes[[n]], bge))
+names(predictions) <- names(tasks)
+for (n in names(predictions)) {
+  fwrite(predictions[[n]], sprintf("results/predictions_%s.csv", n))
+}
+boot <- rbindlist(lapply(names(predictions), function(n) {
+  boot_task(predictions[[n]], outcomes[[n]], n_boot, seed + 500L)
+}))
+secondary <- lapply(names(predictions), function(n) {
+  secondary_metrics(predictions[[n]], outcomes[[n]])
+})
+names(secondary) <- names(predictions)
+fwrite(boot, "results/model_bootstrap.csv")
+fwrite(rbindlist(secondary, fill = TRUE), "results/model_metrics.csv")
+```
+
+`r format(uniqueN(rbindlist(tasks, fill = TRUE)$pg_id), big.mark=",")`
+distinct books were scored, from
+`r format(uniqueN(candidates$pg_id), big.mark=",")` candidates. A class can
+fall short of its target if too many of its texts lack a Project Gutenberg
+start marker or have fewer than 1,900 words after it.
+
+```{r sample-table}
+sample_counts <- rbindlist(lapply(tasks, function(t) {
+  t[, .(books = .N, authors = uniqueN(agent)), by = .(task, class)]
+}))
+kable(sample_counts, col.names = c("Task", "Class", "Books", "Authors"))
+```
+
+```{r gender-cells}
+kable(dcast(tasks$gender[, .N, by = .(cell, class)], cell ~ class, value.var = "N"),
+      col.names = c("Genre and period", "Female", "Male"),
+      caption = "Matched gender sample")
+```
+
+## Text views and models
+
+The **body view** is the evidence. It starts after the Project Gutenberg
+start marker, drops the first 400 words, and takes up to 5,000 words from
+the middle of what remains. That removes the header and the front matter,
+where author, title, and date are concentrated. It does not remove names
+inside the narrative.
+
+The **raw view** is a check on that. It is the opening of the downloaded
+file, cut to the same length as the book's body view, so it includes the
+Project Gutenberg header and the title page. Digits are kept in both views,
+so printed dates are visible. Because folds are author-disjoint, an author's
+name on the title page cannot help with held-out books. What the raw view
+can add is title wording, dates, publisher lines, and prefaces. If raw and
+body score alike, the result is not coming from the cataloguing.
+
+Each view is turned into features in two ways.
+
+- **Word**: counts of words that occur in at least five training books,
+  capped at the 8,000 most common, weighted by TF–IDF. The vocabulary is
+  readable.
+- **Char**: counts of character sequences three to five letters long,
+  including across word boundaries, hashed into 4,096 buckets and weighted
+  by TF–IDF. These pick up spelling, inflection, and function-word habits.
+
+- **BGE**: the body view split into chunks of about 350 words, each embedded
+  with `BAAI/bge-base-en-v1.5`, and averaged into one 768-dimensional vector
+  per book. This is a pretrained sentence encoder rather than features fit
+  to this sample. It was probably trained on some Project Gutenberg text,
+  though never on these labels.
+
+The word and character features feed an L1-penalized regression (`glmnet`,
+alpha = 1, `lambda.1se`); the dense BGE vectors use the ridge form
+(alpha = 0). Each is multinomial for genre and period, binomial for gender,
+and linear for year.
+The baseline predicts the most common training class, or the median training
+year.
+
+Macro-F1 is the unweighted mean of per-class F1, so a model that only finds
+the largest class scores poorly. For year, the score is mean absolute error
+in years. Intervals are 95% bootstrap intervals from `r n_boot` resamples of
+authors, so an author's books are drawn together. A gain is the model's
+score minus the baseline's (for year, the baseline's error minus the
+model's), so a positive gain always means the text helps.
+
+## Results
+
+```{r results-table, results="asis"}
+fmt_ci <- function(est, lo, hi, digits) {
+  sprintf(paste0("%.", digits, "f [%.", digits, "f, %.", digits, "f]"), est, lo, hi)
+}
+labels <- c(baseline = "Baseline", raw_word = "Raw, word", raw_char = "Raw, char",
+            body_word = "Body, word", body_char = "Body, char",
+            body_bge = "Body, BGE")
+for (n in names(predictions)) {
+  b <- boot[task == n]
+  digits <- if (outcomes[[n]] == "year") 1 else 3
+  rows <- data.table(model = names(labels), Model = unname(labels))
+  rows[, Score := vapply(model, function(m) {
+    r <- b[quantity == m]; fmt_ci(r$estimate, r$lo, r$hi, digits)
+  }, character(1))]
+  rows[, Gain := vapply(model, function(m) {
+    r <- b[quantity == paste0("gain_", m)]
+    if (!nrow(r)) "" else fmt_ci(r$estimate, r$lo, r$hi, digits)
+  }, character(1))]
+  extra_col <- secondary[[n]][match(rows$model, model)]
+  if (outcomes[[n]] == "year") {
+    rows[, r := round(extra_col$r, 2)]
+    names_out <- c("Model", "Mean abs. error, years [95% CI]", "Gain [95% CI]", "Correlation")
+  } else {
+    rows[, ba := round(extra_col$balanced_accuracy, 3)]
+    names_out <- c("Model", "Macro-F1 [95% CI]", "Gain [95% CI]", "Balanced accuracy")
+  }
+  cat("\n\n### ", n, "\n\n", sep = "")
+  print(kable(rows[, -1], col.names = names_out))
+}
+```
+
+## Reading the results
+
+```{r reading, results="asis"}
+get_q <- function(n, q) boot[task == n & quantity == q]
+ci_text <- function(r, digits) {
+  sprintf(paste0("%.", digits, "f (95%% CI %.", digits, "f to %.", digits, "f)"),
+          r$estimate, r$lo, r$hi)
+}
+signal_line <- function(n) {
+  year <- outcomes[[n]] == "year"
+  digits <- if (year) 1 else 3
+  base <- get_q(n, "baseline")
+  bw <- get_q(n, "body_word")
+  bc <- get_q(n, "body_char")
+  gw <- get_q(n, "gain_body_word")
+  gc <- get_q(n, "gain_body_char")
+  hw <- get_q(n, "header_word")
+  ge <- get_q(n, "gain_body_bge")
+  what <- if (year) "Mean absolute error in years" else "Macro-F1"
+  first <- sprintf(
+    "**%s.** %s is %.*f for the baseline, %s for body words, and %s for body characters.",
+    n, what, digits, base$estimate, ci_text(bw, digits), ci_text(bc, digits))
+  verdict <- if (gw$lo > 0 || gc$lo > 0) {
+    word_best <- gw$estimate >= gc$estimate
+    sprintf("The text carries this label: the gain over the baseline for body %s is %s, and the interval excludes zero.",
+            if (word_best) "words" else "characters",
+            ci_text(if (word_best) gw else gc, digits))
+  } else {
+    "The gain over the baseline has an interval that includes zero, so this sample does not show a stable signal in the text."
+  }
+  header <- if (hw$lo > 0) {
+    sprintf("The raw opening adds %s on top of the body words, so part of the raw-view score comes from the header and front matter.",
+            ci_text(hw, digits))
+  } else if (hw$hi < 0) {
+    "The body words do better than the raw opening, so the header is not where the signal lies."
+  } else {
+    "The raw opening and the body words do about equally well, so the header adds nothing measurable."
+  }
+  embed <- sprintf("BGE embeddings of the same passage give a gain of %s.",
+                   ci_text(ge, digits))
+  paste(first, verdict, embed, header)
+}
+cat(paste(vapply(names(predictions), signal_line, character(1)), collapse = "\n\n"))
+```
+
+Gender is matched on genre and period, but not on everything that travels
+with gender in this corpus, such as subject matter within nonfiction or the
+kinds of books by women that were reprinted and digitized. A gender result
+here should not be described as a detector of gendered language.
+
+## Confusion matrices
+
+Rows are the true class and columns the predicted class, summed over the
+five held-out folds. The last column is the recall for that row. For the
+year task, the predicted year is placed in the same 25-year bins.
+
+```{r confusion, results="asis"}
+for (n in names(predictions)) {
+  pred <- copy(predictions[[n]])
+  if (outcomes[[n]] == "year") {
+    for (m in models_in(pred)[-1]) {
+      p <- pmin(pmax(pred[[m]], 1800), 1924)
+      set(pred, j = m, value = assign_period25(round(p)))
+    }
+  }
+  cat("\n\n### ", n, " {.tabset}\n\n", sep = "")
+  for (m in c("body_word", "body_char", "body_bge", "raw_word", "raw_char")) {
+    cat("\n\n#### ", labels[[m]], "\n\n", sep = "")
+    tab <- as.data.table(table(Actual = pred$class,
+                               Predicted = factor(pred[[m]], levels = sort(unique(pred$class)))))
+    wide <- dcast(tab, Actual ~ Predicted, value.var = "N", fill = 0)
+    counts <- as.matrix(wide[, -1])
+    wide[, recall := round(diag(counts) / rowSums(counts), 2)]
+    print(kable(wide, caption = sprintf("%s, %s", n, labels[[m]])))
+  }
+}
+```
+
+A transformer is not part of this run. It would be worth fitting where the
+linear body-text model already clears the baseline, as a check on how much
+a stronger encoder adds. It would not change the release.

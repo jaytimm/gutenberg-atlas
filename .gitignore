@@ -1,0 +1,19 @@
+# Large raw snapshot (documented in SOURCE_VERSIONS.md)
+data-raw/hathi_eng_books.tsv
+
+# Caches and render artifacts
+analysis/cache/
+analysis/supplement_files/
+*.html
+*.tex
+*.log
+
+# R / editor
+.Rhistory
+.RData
+.Rproj.user/
+__pycache__/
+paper/gutenberg-atlas_files/
+figure/
+paper/figure/
+paper/todo-revisions.md
